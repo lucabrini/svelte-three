@@ -47,10 +47,13 @@ export function drawLine(
 	return line;
 }
 
-export function currentPerimeterLength(linePoints: THREE.Vector3[]) {
-	let distance = 0;
-	for (let i = 0; i < linePoints.length - 1; i++) {
-		distance += linePoints[i].distanceTo(linePoints[i + 1]);
-	}
-	return Math.round((distance + Number.EPSILON) * 100) / 100;
+
+export function isPointOnLine(
+	point: THREE.Vector3,
+	startPoint: THREE.Vector3,
+	endPoint: THREE.Vector3
+) {
+	const c = new THREE.Vector3();
+	c.crossVectors(startPoint.clone().sub(point), endPoint.clone().sub(point));
+	return !c.length();
 }

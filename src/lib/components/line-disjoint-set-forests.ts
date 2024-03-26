@@ -1,42 +1,38 @@
+import type { Line2 } from 'three/examples/jsm/Addons.js';
 import * as THREE from 'three';
-
 export class TreeNode {
-	private _parent: TreeNode;
-	private _point: THREE.Vector3;
-	private _rank: number;
+	parent: TreeNode;
+	line: Line2;
+	rank: number;
+	startPoint: THREE.Vector3;
+	endPoint: THREE.Vector3;
 
-	constructor(point: THREE.Vector3, parent?: TreeNode) {
-		this._parent = parent ?? this;
-		this._point = point;
-		this._rank = 0;
-	}
-
-	get parent() {
-		return this._parent;
-	}
-	set parent(value: TreeNode) {
-		this._parent = value;
-	}
-	get point() {
-		return this._point;
-	}
-	set point(value: THREE.Vector3) {
-		this._point = value;
-	}
-	get rank() {
-		return this._rank;
-	}
-	set rank(value: number) {
-		this._rank = value;
+	constructor(line: Line2, startPoint: THREE.Vector3, endPoint: THREE.Vector3, parent?: TreeNode) {
+		this.parent = parent ?? this;
+		this.line = line;
+		this.rank = 0;
+		this.startPoint = startPoint;
+		this.endPoint = endPoint;
 	}
 }
 
-export class PointDisjointSet {
-	private _sets: object[] = [];
+export class TraitDisjointSet {
+	private _nodes: TreeNode[] = [];
 
-	makeSet(point: THREE.Vector3) {
-		const representative = new TreeNode(point);
-		this._sets.push(representative);
+	makeNode(line: Line2, startPoint: THREE.Vector3, endPoint: THREE.Vector3, parent: TreeNode) {
+		const node = new TreeNode(line, startPoint, endPoint, parent);
+		this._nodes.push(node);
+
+		return node;
+	}
+
+	findNode(line: Line2) {
+		return this._nodes.find((n) => n.line === line);
+	}
+
+	makeSet(line: Line2, startPoint: THREE.Vector3, endPoint: THREE.Vector3) {
+		const representative = new TreeNode(line, startPoint, endPoint);
+		this._nodes.push(representative);
 		return representative;
 	}
 
@@ -61,5 +57,22 @@ export class PointDisjointSet {
 				nodeB.rank = nodeA.rank + 1;
 			}
 		}
+	}
+
+	linesLength() {
+		let length = 0;
+		this._nodes.forEach((n) => {
+			length += n.startPoint.distanceTo(n.endPoint);
+		});
+
+		return length;
+	}
+
+	get nodes() {
+		return this._nodes;
+	}
+
+	get lines() {
+		return this._nodes.map((n) => n.line);
 	}
 }

@@ -2,15 +2,9 @@
 	import { onMount } from 'svelte';
 	import * as THREE from 'three';
 	import { DrawingMode, gridHelper, pointMaterial } from './engine-config';
-	import {
-		currentPerimeterLength,
-		defineCamera,
-		definePlane,
-		defineRenderer,
-		defineScene,
-		drawLine
-	} from './engine-utils';
+	import { defineCamera, definePlane, defineRenderer, defineScene, drawLine } from './engine-utils';
 	import { Line2 } from 'three/examples/jsm/Addons.js';
+	import { TraitDisjointSet, TreeNode } from './line-disjoint-set-forests';
 
 	let canvasParent: HTMLElement;
 	let sketchingCanvas: HTMLElement;
@@ -21,9 +15,11 @@
 	let plane: THREE.Mesh;
 	let scene: THREE.Scene;
 
-	let linePoints: THREE.Vector3[] = [];
-	let startingPoint: THREE.Vector3;
-	let lines: Line2[] = [];
+	let traitDisjointSet = new TraitDisjointSet();
+	let totalLength = 0;
+
+	let startPoint: THREE.Vector3;
+	let startParentNode: TreeNode;
 
 	let temporaryLine: Line2;
 	let drawing = false;
@@ -62,25 +58,42 @@
 	}
 
 	function handleMouseDown(e: MouseEvent) {
-		drawing = true;
-
-		const linePoint = mouseToPoint(e.clientX, e.clientY);
-		linePoints = [...linePoints, linePoint];
-
-		const pointGeometry = new THREE.BufferGeometry().setFromPoints([linePoint]);
-		const pointRender = new THREE.Points(pointGeometry, pointMaterial);
-		scene.add(pointRender);
-
-		if (linePoints.length > 1) {
-			const line = drawLine(linePoints.at(-2)!, linePoint);
-			scene.add(line);
-			lines.push(line);
+		switch (currentMode) {
+			case DrawingMode.SKETCH:
+				draw(e);
+				break;
 		}
+	}
+
+	function draw({ clientX, clientY }: MouseEvent) {
+		const touchedPoint = mouseToPoint(clientX, clientY);
+		raycaster.setFromCamera(new THREE.Vector2(touchedPoint.x, touchedPoint.y), camera);
+		const intersections = raycaster.intersectObjects(scene.children);
+		console.log(intersections);
+
+		if (drawing) {
+			const line = drawLine(startPoint, touchedPoint);
+			if (intersections.length === 0) {
+				traitDisjointSet.makeSet(line, startPoint, touchedPoint);
+			} else {
+				traitDisjointSet.makeNode(line, startPoint, touchedPoint, startParentNode);
+			}
+			scene.add(line);
+			drawing = false;
+		} else {
+			drawing = true;
+			startPoint = touchedPoint;
+			if (intersections.length !== 0) {
+				startParentNode = traitDisjointSet.findNode(intersections[0].object as Line2)!;
+			}
+		}
+
+		totalLength = traitDisjointSet.linesLength();
 	}
 
 	function handleMouseMove(e: MouseEvent) {
 		const linePoint = mouseToPoint(e.clientX, e.clientY);
-		if (drawing && linePoints.length > 0) {
+		if (drawing) {
 			drawTemporaryLine(linePoint);
 		}
 	}
@@ -88,12 +101,13 @@
 	function handleKeyDown(e: KeyboardEvent) {
 		if (e.code === 'Escape') {
 			drawing = false;
+
 			scene.remove(temporaryLine);
 		}
 	}
 
 	function drawTemporaryLine(linePoint: THREE.Vector3) {
-		const line = drawLine(linePoints.at(-1)!, linePoint);
+		const line = drawLine(startPoint, linePoint);
 
 		if (temporaryLine != undefined) {
 			scene.remove(temporaryLine);
@@ -152,6 +166,7 @@
 				class="bg-white p-2 px-6 rounded-md text-gray-700 font-semibold hover:bg-gray-200 transition-colors"
 				>Cancella tratto</button
 			>
+			<p>Lunghezza totale: {totalLength}</p>
 		</div>
 	</div>
 </div>

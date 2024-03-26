@@ -3,6 +3,3 @@
 </script>
 
 <DrawEngine />
-
-<style>
-</style>
