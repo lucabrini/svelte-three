@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { planeMaterial, sceneBackground } from './engine-config';
+import { planeMaterial, sceneBackground, shaderLineMaterial } from './engine-config';
+import { LineGeometry, Line2 } from 'three/examples/jsm/Addons.js';
 
 export function defineRenderer(width: number, height: number, canvas: HTMLElement) {
 	const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -28,4 +29,20 @@ export function definePlane() {
 	const plane = new THREE.Mesh(planeGeometry, planeMaterial);
 
 	return plane;
+}
+
+export function drawLine(
+	pointA: THREE.Vector3,
+	pointB: THREE.Vector3,
+	color = new THREE.Color(0xff0000)
+) {
+	const positions = [...pointA.toArray(), ...pointB.toArray()];
+
+	const lineGeometry = new LineGeometry()
+		.setPositions(positions)
+		.setColors([...color.toArray(), ...color.toArray()]);
+
+	const line = new Line2(lineGeometry, shaderLineMaterial);
+	line.scale.set(1, 1, 1);
+	return line;
 }

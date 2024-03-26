@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import * as THREE from 'three';
-	import { gridHelper, lineMaterial, pointMaterial } from './engine-config';
-	import { defineCamera, definePlane, defineRenderer, defineScene } from './engine-utils';
+	import { gridHelper, lineMaterial, pointMaterial, shaderLineMaterial } from './engine-config';
+	import { defineCamera, definePlane, defineRenderer, defineScene, drawLine } from './engine-utils';
+	import { Line2, LineGeometry } from 'three/examples/jsm/Addons.js';
 
 	let canvasParent: HTMLElement;
 	let sketchingCanvas: HTMLElement;
@@ -15,7 +16,10 @@
 	let scene: THREE.Scene;
 
 	let linePoints: THREE.Vector3[] = [];
-	let lines: THREE.Line[] = [];
+	let lines: Line2[] = [];
+
+	let temporaryLine: Line2;
+	let drawing = false;
 
 	function init() {
 		const { clientWidth, clientHeight } = canvasParent;
@@ -35,37 +39,73 @@
 		renderer.render(scene, camera);
 	}
 
-	function handleMouseDown(e: MouseEvent) {
-		mouse.x = (e.clientX / canvasParent.clientWidth) * 2 - 1;
-		mouse.y = -(e.clientY / canvasParent.clientHeight) * 2 + 1;
+	function mouseToPoint(clientX: number, clientY: number) {
+		mouse.x = (clientX / canvasParent.clientWidth) * 2 - 1;
+		mouse.y = -(clientY / canvasParent.clientHeight) * 2 + 1;
 		raycaster.setFromCamera(mouse, camera);
 
 		const intersects = raycaster.intersectObject(plane);
 		const linePoint = intersects[0].point.setZ(0).round();
-		linePoints.push(linePoint);
+
+		return linePoint;
+	}
+
+	function handleMouseDown(e: MouseEvent) {
+		drawing = true;
+
+		const linePoint = mouseToPoint(e.clientX, e.clientY);
+		linePoints = [...linePoints, linePoint];
 
 		const pointGeometry = new THREE.BufferGeometry().setFromPoints([linePoint]);
 		const pointRender = new THREE.Points(pointGeometry, pointMaterial);
 		scene.add(pointRender);
 
 		if (linePoints.length > 1) {
-			const lineGeometry = new THREE.BufferGeometry().setFromPoints([
-				linePoints.at(-2)!,
-				linePoint
-			]);
-			const line = new THREE.Line(lineGeometry, lineMaterial);
+			const line = drawLine(linePoints.at(-2)!, linePoint);
 			scene.add(line);
 			lines.push(line);
 		}
 	}
 
-	function handleMouseMove(e: MouseEvent) {}
+	function handleMouseMove(e: MouseEvent) {
+		const linePoint = mouseToPoint(e.clientX, e.clientY);
+		if (drawing && linePoints.length > 0) {
+			drawTemporaryLine(linePoint);
+		}
+	}
 
-	function handleMouseUp(e: MouseEvent) {}
+	function handleKeyDown(e: KeyboardEvent) {
+		if (e.code === 'Escape') {
+			drawing = false;
+			scene.remove(temporaryLine);
+		}
+	}
+
+	function drawTemporaryLine(linePoint: THREE.Vector3) {
+		// Drawing temporary line
+
+		const line = drawLine(linePoints.at(-1)!, linePoint);
+
+		if (temporaryLine != undefined) {
+			scene.remove(temporaryLine);
+		}
+		scene.add(line);
+		temporaryLine = line;
+	}
+
+	function currentPerimeterLength() {
+		let distance = 0;
+		for (let i = 0; i < linePoints.length - 1; i++) {
+			distance += linePoints[i].distanceTo(linePoints[i + 1]);
+		}
+		return Math.round((distance + Number.EPSILON) * 100) / 100;
+	}
 
 	onMount(() => {
 		init();
 		animate();
+
+		document.addEventListener('keydown', handleKeyDown);
 	});
 </script>
 
@@ -75,7 +115,12 @@
 	bind:this={canvasParent}
 	on:mousedown={handleMouseDown}
 	on:mousemove={handleMouseMove}
-	on:mouseup={handleMouseUp}
+	on:keypress={handleKeyDown}
 >
 	<canvas bind:this={sketchingCanvas} class="m-0" />
+	<div class="fixed top-0 right-0 w-60 h-40 m-2 p-2 rounded-lg bg-red-400 opacity-70">
+		{#key linePoints}
+			<p>Lunghezza percorso: {currentPerimeterLength()}</p>
+		{/key}
+	</div>
 </div>

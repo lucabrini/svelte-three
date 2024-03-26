@@ -1,1 +1,8 @@
-<p class="">Home</p>
+<script>
+	import DrawEngine from '$lib/components/DrawEngine.svelte';
+</script>
+
+<DrawEngine />
+
+<style>
+</style>
