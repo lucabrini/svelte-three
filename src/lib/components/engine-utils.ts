@@ -34,7 +34,7 @@ export function definePlane() {
 export function drawLine(
 	pointA: THREE.Vector3,
 	pointB: THREE.Vector3,
-	color = new THREE.Color(0xff0000)
+	color = new THREE.Color(0x000000)
 ) {
 	const positions = [...pointA.toArray(), ...pointB.toArray()];
 
@@ -45,4 +45,12 @@ export function drawLine(
 	const line = new Line2(lineGeometry, shaderLineMaterial);
 	line.scale.set(1, 1, 1);
 	return line;
+}
+
+export function currentPerimeterLength(linePoints: THREE.Vector3[]) {
+	let distance = 0;
+	for (let i = 0; i < linePoints.length - 1; i++) {
+		distance += linePoints[i].distanceTo(linePoints[i + 1]);
+	}
+	return Math.round((distance + Number.EPSILON) * 100) / 100;
 }
