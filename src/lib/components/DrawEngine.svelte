@@ -5,6 +5,7 @@
 	import { defineCamera, definePlane, defineRenderer, defineScene, drawLine } from './engine-utils';
 	import { Line2 } from 'three/examples/jsm/Addons.js';
 	import { TraitDisjointSet, TreeNode } from './line-disjoint-set-forests';
+	import type { ChangeEventHandler } from 'svelte/elements';
 
 	let canvasParent: HTMLElement;
 	let sketchingCanvas: HTMLElement;
@@ -62,7 +63,23 @@
 			case DrawingMode.SKETCH:
 				draw(e);
 				break;
+			case DrawingMode.DELETE:
+				deleteLine(e);
+				break;
 		}
+	}
+
+	function deleteLine({ clientX, clientY }: MouseEvent) {
+		const { mouse } = mouseToPoint(clientX, clientY);
+		raycaster.setFromCamera(mouse, camera);
+		const intersections = raycaster.intersectObjects(traitDisjointSet.lines);
+
+		scene.remove(intersections[0].object);
+
+		const lineNode = traitDisjointSet.findNode(intersections[0].object as Line2)!;
+		traitDisjointSet.deleteNode(lineNode);
+
+		console.log(traitDisjointSet.toJson());
 	}
 
 	function draw({ clientX, clientY }: MouseEvent) {
@@ -70,6 +87,7 @@
 
 		raycaster.setFromCamera(mouse, camera);
 		const intersections = raycaster.intersectObjects(traitDisjointSet.lines);
+		console.log(intersections.length)
 
 		if (drawing) {
 			drawing = false;
@@ -93,7 +111,7 @@
 					traitDisjointSet.unionSet(newNode, endParentNode);
 				}
 			}
-
+			console.log(traitDisjointSet.toJson());
 			totalLength = Math.round(traitDisjointSet.linesLength() * 100) / 100;
 		} else {
 			drawing = true;
@@ -103,9 +121,9 @@
 			}
 		}
 
-		const pointGeometry = new THREE.BufferGeometry().setFromPoints([touchedPoint]);
+		/* const pointGeometry = new THREE.BufferGeometry().setFromPoints([touchedPoint]);
 		const pointRender = new THREE.Points(pointGeometry, pointMaterial);
-		scene.add(pointRender);
+		scene.add(pointRender); */
 	}
 
 	function handleMouseMove(e: MouseEvent) {
@@ -118,8 +136,9 @@
 	function handleKeyDown(e: KeyboardEvent) {
 		if (e.code === 'Escape') {
 			drawing = false;
-
 			scene.remove(temporaryLine);
+
+			//currentMode = DrawingMode.IDLE
 		}
 	}
 
@@ -134,9 +153,9 @@
 		temporaryLine = line;
 	}
 
-	function handleChangeMode(newMode: DrawingMode) {
-		currentMode = currentMode === newMode ? DrawingMode.IDLE : newMode;
-	}
+	const handleModeChange: ChangeEventHandler<HTMLInputElement> = (e) => {
+		currentMode = parseInt(e.currentTarget.value);
+	};
 
 	$: {
 		switch (currentMode) {
@@ -171,19 +190,41 @@
 	<canvas bind:this={sketchingCanvas} class="m-0" />
 	<div class="fixed flex justify-center top-0 w-screen h-40 p-2">
 		<div
-			class="h-14 w-2/4 p-2 flex flex-row items-center space-x-2 bg-gray-700 rounded-lg shadow-lg text-white"
+			class="h-14 w-2/4 p-2 flex flex-row items-center justify-between space-x-2 bg-gray-700 rounded-lg shadow-lg text-white"
 		>
-			<button
-				on:click={() => handleChangeMode(DrawingMode.SKETCH)}
-				class="bg-white p-2 px-6 rounded-md text-gray-700 font-semibold hover:bg-gray-200 transition-colors"
-				>Disegna</button
-			>
-			<button
-				on:click={() => handleChangeMode(DrawingMode.DELETE)}
-				class="bg-white p-2 px-6 rounded-md text-gray-700 font-semibold hover:bg-gray-200 transition-colors"
-				>Cancella tratto</button
-			>
-			<p>Lunghezza totale: {totalLength}</p>
+			<div class="flex flex-col">
+				<span class="font-bold">Modalità:</span>
+				<form class="text-sm">
+					<input
+						id="drawing-mode-draw-btn"
+						type="radio"
+						value={DrawingMode.SKETCH}
+						name="drawing-mode"
+						checked={currentMode === DrawingMode.SKETCH}
+						on:change={handleModeChange}
+					/>
+					<label for="drawing-mode-draw-btn">Disegna</label>
+					<input
+						id="drawing-mode-delete-btn"
+						type="radio"
+						value={DrawingMode.DELETE}
+						checked={currentMode === DrawingMode.DELETE}
+						name="drawing-mode"
+						on:click={handleModeChange}
+					/>
+					<label for="drawing-mode-delete-btn">Cancella</label>
+					<input
+						id="drawing-mode-idle-btn"
+						type="radio"
+						value={DrawingMode.IDLE}
+						checked={currentMode === DrawingMode.IDLE}
+						name="drawing-mode"
+						on:click={handleModeChange}
+					/>
+					<label for="drawing-mode-idle-btn">Idle</label>
+				</form>
+			</div>
+			<p>Lunghezza totale: <span class="w-14">{totalLength}</span></p>
 		</div>
 	</div>
 </div>

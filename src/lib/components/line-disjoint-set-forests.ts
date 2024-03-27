@@ -24,12 +24,12 @@ export type ForestTree = {
 export class TraitDisjointSet {
 	private _forest: ForestTree[] = [];
 
-	// Disjoint Set Data Structure methods 
+	// Disjoint Set Data Structure methods
 	makeSet(line: Line2, startPoint: THREE.Vector3, endPoint: THREE.Vector3) {
 		const representative = new TreeNode(line, startPoint, endPoint);
 		this._forest.push({
 			representative,
-			nodes: []
+			nodes: [representative]
 		});
 		return representative;
 	}
@@ -59,6 +59,11 @@ export class TraitDisjointSet {
 		}
 	}
 
+	deleteSet(node: TreeNode) {
+		const representative = this.findSet(node);
+		const forestIndex = this._forest.findIndex((n) => n.representative === representative);
+		this._forest.splice(forestIndex, 1);
+	}
 
 	// Forest Tree Nodes methods
 	makeNode(line: Line2, startPoint: THREE.Vector3, endPoint: THREE.Vector3, parent: TreeNode) {
@@ -75,6 +80,26 @@ export class TraitDisjointSet {
 		return this.nodes.find((n) => n.line === line);
 	}
 
+	deleteNode(node: TreeNode) {
+		const representative = this.findSet(node);
+
+		const forestIndex = this._forest.findIndex((n) => n.representative === representative);
+
+		const nodeIndex = this._forest[forestIndex].nodes.indexOf(node);
+		this._forest[forestIndex].nodes.splice(nodeIndex, 1);
+
+		if (node === representative) {
+			// Setting parent of those nodes who had this node as parent
+			for (let i = 0; i < this._forest[forestIndex].nodes.length; i++) {
+				if (this._forest[forestIndex].nodes[i].parent === node) {
+					this._forest[forestIndex].nodes[i].parent = this._forest[forestIndex].nodes[1];
+				}
+			}
+
+			this._forest[forestIndex].representative = this._forest[forestIndex].nodes[1];
+		}
+	}
+
 	private linkForest(parent: TreeNode, node: TreeNode) {
 		const treeBIndex = this._forest.findIndex((t) => t.representative === node)!;
 		const treeA = this._forest.find((t) => t.representative === parent)!;
@@ -86,7 +111,7 @@ export class TraitDisjointSet {
 	get nodes() {
 		let nodes: TreeNode[] = [];
 		this._forest.forEach((f) => {
-			nodes = nodes.concat([f.representative, ...f.nodes]);
+			nodes = nodes.concat(f.nodes);
 		});
 
 		return nodes;
