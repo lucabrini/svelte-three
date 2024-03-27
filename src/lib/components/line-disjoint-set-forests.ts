@@ -16,23 +16,21 @@ export class TreeNode {
 	}
 }
 
+export type ForestTree = {
+	representative: TreeNode;
+	nodes: TreeNode[];
+};
+
 export class TraitDisjointSet {
-	private _nodes: TreeNode[] = [];
+	private _forest: ForestTree[] = [];
 
-	makeNode(line: Line2, startPoint: THREE.Vector3, endPoint: THREE.Vector3, parent: TreeNode) {
-		const node = new TreeNode(line, startPoint, endPoint, parent);
-		this._nodes.push(node);
-
-		return node;
-	}
-
-	findNode(line: Line2) {
-		return this._nodes.find((n) => n.line === line);
-	}
-
+	// Disjoint Set Data Structure methods 
 	makeSet(line: Line2, startPoint: THREE.Vector3, endPoint: THREE.Vector3) {
 		const representative = new TreeNode(line, startPoint, endPoint);
-		this._nodes.push(representative);
+		this._forest.push({
+			representative,
+			nodes: []
+		});
 		return representative;
 	}
 
@@ -45,34 +43,69 @@ export class TraitDisjointSet {
 	}
 
 	unionSet(nodeA: TreeNode, nodeB: TreeNode) {
-		this.link(this.findSet(nodeA), this.findSet(nodeB));
+		this.linkSet(this.findSet(nodeA), this.findSet(nodeB));
 	}
 
-	link(nodeA: TreeNode, nodeB: TreeNode) {
+	linkSet(nodeA: TreeNode, nodeB: TreeNode) {
 		if (nodeA.rank > nodeB.rank) {
 			nodeB.parent = nodeA;
+			this.linkForest(nodeA, nodeB);
 		} else {
 			nodeA.parent = nodeB;
+			this.linkForest(nodeB, nodeA);
 			if (nodeA.rank === nodeB.rank) {
 				nodeB.rank = nodeA.rank + 1;
 			}
 		}
 	}
 
+
+	// Forest Tree Nodes methods
+	makeNode(line: Line2, startPoint: THREE.Vector3, endPoint: THREE.Vector3, parent: TreeNode) {
+		const node = new TreeNode(line, startPoint, endPoint, parent);
+
+		const representative = this.findSet(parent);
+		const forestIndex = this._forest.findIndex((n) => n.representative === representative);
+		this._forest[forestIndex].nodes.push(node);
+
+		return node;
+	}
+
+	findNode(line: Line2) {
+		return this.nodes.find((n) => n.line === line);
+	}
+
+	private linkForest(parent: TreeNode, node: TreeNode) {
+		const treeBIndex = this._forest.findIndex((t) => t.representative === node)!;
+		const treeA = this._forest.find((t) => t.representative === parent)!;
+		treeA.nodes = treeA.nodes.concat(this._forest[treeBIndex].nodes);
+		treeA.nodes.push(node);
+		this._forest.splice(treeBIndex, 1);
+	}
+
+	get nodes() {
+		let nodes: TreeNode[] = [];
+		this._forest.forEach((f) => {
+			nodes = nodes.concat([f.representative, ...f.nodes]);
+		});
+
+		return nodes;
+	}
+
+	toJson() {
+		return this._forest;
+	}
+
 	linesLength() {
 		let length = 0;
-		this._nodes.forEach((n) => {
+		this.nodes.forEach((n) => {
 			length += n.startPoint.distanceTo(n.endPoint);
 		});
 
 		return length;
 	}
 
-	get nodes() {
-		return this._nodes;
-	}
-
 	get lines() {
-		return this._nodes.map((n) => n.line);
+		return this.nodes.map((n) => n.line);
 	}
 }

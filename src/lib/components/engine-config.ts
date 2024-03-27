@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 
-export const pointMaterial = new THREE.PointsMaterial({ size: 0.1, color: 0x000000 });
+export const pointMaterial = new THREE.PointsMaterial({ size: 0.5, color: 0xff00ff });
 export const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
 export const sceneBackground = new THREE.Color('#ffffff');
 export const planeMaterial = new THREE.MeshBasicMaterial({ visible: false, color: '#ff0000' });
