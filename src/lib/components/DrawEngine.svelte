@@ -1,25 +1,30 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import * as THREE from 'three';
-	import { gridHelper, lineMaterial, pointMaterial, shaderLineMaterial } from './engine-config';
+	import { DrawingMode, gridHelper, pointMaterial } from './engine-config';
 	import { defineCamera, definePlane, defineRenderer, defineScene, drawLine } from './engine-utils';
-	import { Line2, LineGeometry } from 'three/examples/jsm/Addons.js';
+	import { Line2 } from 'three/examples/jsm/Addons.js';
+	import { TraitDisjointSet, TreeNode } from './line-disjoint-set-forests';
 
 	let canvasParent: HTMLElement;
 	let sketchingCanvas: HTMLElement;
 
-	let mouse = new THREE.Vector2();
 	let raycaster: THREE.Raycaster;
 	let camera: THREE.Camera;
 	let renderer: THREE.WebGLRenderer;
 	let plane: THREE.Mesh;
 	let scene: THREE.Scene;
 
-	let linePoints: THREE.Vector3[] = [];
-	let lines: Line2[] = [];
+	let traitDisjointSet = new TraitDisjointSet();
+	let totalLength = 0;
+
+	let startPoint: THREE.Vector3;
+	let startParentNode: TreeNode | null = null;
 
 	let temporaryLine: Line2;
 	let drawing = false;
+
+	let currentMode = DrawingMode.IDLE;
 
 	function init() {
 		const { clientWidth, clientHeight } = canvasParent;
@@ -40,65 +45,111 @@
 	}
 
 	function mouseToPoint(clientX: number, clientY: number) {
+		const mouse = new THREE.Vector2();
+
 		mouse.x = (clientX / canvasParent.clientWidth) * 2 - 1;
 		mouse.y = -(clientY / canvasParent.clientHeight) * 2 + 1;
 		raycaster.setFromCamera(mouse, camera);
 
 		const intersects = raycaster.intersectObject(plane);
-		const linePoint = intersects[0].point.setZ(0).round();
+		const touchedPoint = intersects[0].point.setZ(0).round();
 
-		return linePoint;
+		return { touchedPoint, mouse };
 	}
 
 	function handleMouseDown(e: MouseEvent) {
-		drawing = true;
-
-		const linePoint = mouseToPoint(e.clientX, e.clientY);
-		linePoints = [...linePoints, linePoint];
-
-		const pointGeometry = new THREE.BufferGeometry().setFromPoints([linePoint]);
-		const pointRender = new THREE.Points(pointGeometry, pointMaterial);
-		scene.add(pointRender);
-
-		if (linePoints.length > 1) {
-			const line = drawLine(linePoints.at(-2)!, linePoint);
-			scene.add(line);
-			lines.push(line);
+		switch (currentMode) {
+			case DrawingMode.SKETCH:
+				draw(e);
+				break;
 		}
 	}
 
+	function draw({ clientX, clientY }: MouseEvent) {
+		const { touchedPoint, mouse } = mouseToPoint(clientX, clientY);
+
+		raycaster.setFromCamera(mouse, camera);
+		const intersections = raycaster.intersectObjects(traitDisjointSet.lines);
+
+		if (drawing) {
+			drawing = false;
+			const line = drawLine(startPoint, touchedPoint);
+			scene.add(line);
+
+			// If line A has started on a pre-existing line B, make a node in the
+			// line B's forest and if line A has finished on another pre-existing
+			// line C, merge line C's and line B's forest
+			if (startParentNode !== null) {
+				traitDisjointSet.makeNode(line, startPoint, touchedPoint, startParentNode);
+				if (intersections.length !== 0) {
+					const endParentNode = traitDisjointSet.findNode(intersections[0].object as Line2)!;
+					traitDisjointSet.unionSet(startParentNode, endParentNode);
+				}
+				startParentNode = null;
+			} else {
+				const newNode = traitDisjointSet.makeSet(line, startPoint, touchedPoint);
+				if (intersections.length !== 0) {
+					const endParentNode = traitDisjointSet.findNode(intersections[0].object as Line2)!;
+					traitDisjointSet.unionSet(newNode, endParentNode);
+				}
+			}
+
+			totalLength = Math.round(traitDisjointSet.linesLength() * 100) / 100;
+		} else {
+			drawing = true;
+			startPoint = touchedPoint;
+			if (intersections.length !== 0) {
+				startParentNode = traitDisjointSet.findNode(intersections[0].object as Line2)!;
+			}
+		}
+
+		const pointGeometry = new THREE.BufferGeometry().setFromPoints([touchedPoint]);
+		const pointRender = new THREE.Points(pointGeometry, pointMaterial);
+		scene.add(pointRender);
+	}
+
 	function handleMouseMove(e: MouseEvent) {
-		const linePoint = mouseToPoint(e.clientX, e.clientY);
-		if (drawing && linePoints.length > 0) {
-			drawTemporaryLine(linePoint);
+		const { touchedPoint } = mouseToPoint(e.clientX, e.clientY);
+		if (drawing) {
+			drawTemporaryLine(touchedPoint);
 		}
 	}
 
 	function handleKeyDown(e: KeyboardEvent) {
 		if (e.code === 'Escape') {
 			drawing = false;
+
 			scene.remove(temporaryLine);
 		}
 	}
 
 	function drawTemporaryLine(linePoint: THREE.Vector3) {
-		// Drawing temporary line
-
-		const line = drawLine(linePoints.at(-1)!, linePoint);
+		const line = drawLine(startPoint, linePoint);
 
 		if (temporaryLine != undefined) {
 			scene.remove(temporaryLine);
 		}
+
 		scene.add(line);
 		temporaryLine = line;
 	}
 
-	function currentPerimeterLength() {
-		let distance = 0;
-		for (let i = 0; i < linePoints.length - 1; i++) {
-			distance += linePoints[i].distanceTo(linePoints[i + 1]);
+	function handleChangeMode(newMode: DrawingMode) {
+		currentMode = currentMode === newMode ? DrawingMode.IDLE : newMode;
+	}
+
+	$: {
+		switch (currentMode) {
+			case DrawingMode.SKETCH:
+				document.body.style.cursor = 'crosshair';
+				break;
+			case DrawingMode.DELETE:
+				document.body.style.cursor = 'crosshair';
+				break;
+			case DrawingMode.IDLE:
+				document.body.style.cursor = 'auto';
+				break;
 		}
-		return Math.round((distance + Number.EPSILON) * 100) / 100;
 	}
 
 	onMount(() => {
@@ -118,9 +169,21 @@
 	on:keypress={handleKeyDown}
 >
 	<canvas bind:this={sketchingCanvas} class="m-0" />
-	<div class="fixed top-0 right-0 w-60 h-40 m-2 p-2 rounded-lg bg-red-400 opacity-70">
-		{#key linePoints}
-			<p>Lunghezza percorso: {currentPerimeterLength()}</p>
-		{/key}
+	<div class="fixed flex justify-center top-0 w-screen h-40 p-2">
+		<div
+			class="h-14 w-2/4 p-2 flex flex-row items-center space-x-2 bg-gray-700 rounded-lg shadow-lg text-white"
+		>
+			<button
+				on:click={() => handleChangeMode(DrawingMode.SKETCH)}
+				class="bg-white p-2 px-6 rounded-md text-gray-700 font-semibold hover:bg-gray-200 transition-colors"
+				>Disegna</button
+			>
+			<button
+				on:click={() => handleChangeMode(DrawingMode.DELETE)}
+				class="bg-white p-2 px-6 rounded-md text-gray-700 font-semibold hover:bg-gray-200 transition-colors"
+				>Cancella tratto</button
+			>
+			<p>Lunghezza totale: {totalLength}</p>
+		</div>
 	</div>
 </div>

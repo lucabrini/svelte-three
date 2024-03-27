@@ -34,7 +34,7 @@ export function definePlane() {
 export function drawLine(
 	pointA: THREE.Vector3,
 	pointB: THREE.Vector3,
-	color = new THREE.Color(0xff0000)
+	color = new THREE.Color(0x000000)
 ) {
 	const positions = [...pointA.toArray(), ...pointB.toArray()];
 
@@ -45,4 +45,15 @@ export function drawLine(
 	const line = new Line2(lineGeometry, shaderLineMaterial);
 	line.scale.set(1, 1, 1);
 	return line;
+}
+
+
+export function isPointOnLine(
+	point: THREE.Vector3,
+	startPoint: THREE.Vector3,
+	endPoint: THREE.Vector3
+) {
+	const c = new THREE.Vector3();
+	c.crossVectors(startPoint.clone().sub(point), endPoint.clone().sub(point));
+	return !c.length();
 }
